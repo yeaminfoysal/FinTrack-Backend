@@ -1,4 +1,5 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../generated/prisma/client';
 
 @Injectable()
@@ -7,9 +8,12 @@ export class PrismaService
   implements OnModuleInit, OnModuleDestroy
 {
   constructor() {
-    // In Prisma 7 the datasource URL lives in prisma.config.ts (CLI only),
-    // so the runtime client receives it explicitly from the environment.
-    super({ datasourceUrl: process.env.DATABASE_URL });
+    // Prisma 7's `prisma-client` generator connects via a driver adapter.
+    // The datasource URL lives in prisma.config.ts (CLI only), so the runtime
+    // client receives it through the pg adapter from the environment.
+    super({
+      adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
+    });
   }
 
   async onModuleInit(): Promise<void> {

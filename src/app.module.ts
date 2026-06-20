@@ -1,10 +1,31 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import { PrismaModule } from './prisma/prisma.module';
+import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
+import { AuthModule } from './auth/auth.module';
+import { UsersModule } from './users/users.module';
+import { IncomeModule } from './income/income.module';
+import { ExpenseModule } from './expense/expense.module';
+import { LoanModule } from './loan/loan.module';
+import { SummaryModule } from './summary/summary.module';
+import { SyncModule } from './sync/sync.module';
 
 @Module({
-  imports: [],
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
+    PrismaModule,
+    AuthModule,
+    UsersModule,
+    IncomeModule,
+    ExpenseModule,
+    LoanModule,
+    SummaryModule,
+    SyncModule,
+  ],
   controllers: [AppController],
-  providers: [AppService],
+  // JWT auth is enforced globally; routes opt out with @Public().
+  providers: [{ provide: APP_GUARD, useClass: JwtAuthGuard }],
 })
 export class AppModule {}
