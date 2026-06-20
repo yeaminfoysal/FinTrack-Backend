@@ -87,26 +87,33 @@ Daily Expense + Outstanding Lent + Untracked Expense
 
 > দ্রষ্টব্য: Income ও Daily Expense **মাস-ভিত্তিক**, কিন্তু Outstanding Lent/Borrowed **global running total** (Modification #9 অনুযায়ী মাসে মাসে পুনরায় গোনা হয় না)। এই দুটো scope মেলালে hisab মিলবে না।
 
+> এখানে **Opening = savings-ledger opening** (§E) — এতে আগের মাসগুলোর untracked fold করা থাকে কিন্তু loan effect **থাকে না** (loan আলাদাভাবে এই formula-তেই বিয়োগ/যোগ হচ্ছে)। তাই Opening কখনো Practical Balance-এর সমান নয়।
+
 ## C. Untracked Expense
 
 `Untracked Expense = Theoretical Balance − Practical Balance`
 
 - Practical Balance input না দিলে → **0**।
 - **Negative হলে** (Practical > Theoretical, যেমন না-লেখা income/gift): এটি expense নয় — UI-তে **"Untracked Income"** হিসেবে দেখাবে (একই মান, opposite sign)। কখনো negative "expense" দেখানো হবে না।
+- এই Untracked **Monthly Saving থেকেও বিয়োগ হয়** (§D) এবং Opening chain-এ fold হয় (§E) — অর্থাৎ এটা স্থায়ীভাবে হিসাবভুক্ত, শুধু একটা ভাসমান gap নয়।
 
-## D. Monthly Saving (আগে অনুপস্থিত ছিল)
+## D. Monthly Saving
 
-`Monthly Saving = Month Income − Month Daily Expense`
+`Monthly Saving = Month Income − (Month Daily Expense + Month Untracked Expense)`
 
-- **Loan (Lent/Borrowed) এতে ধরা হবে না** — loan আলাদা global running total; এখানে ধরলে double-count হবে।
-- **Untracked Expense এতে ধরা হবে না** — Saving হলো *tracked* হিসাব; untracked শুধু reconciliation/দেখানোর জন্য।
-- (চাইলে আলাদা একটি derived "real saving" দেখানো যায়: `Income − Daily Expense − Untracked` — কিন্তু এটি **Carry Forward-এ ব্যবহার করা যাবে না**।)
+- **Untracked Expense এতে ধরা হবে (বিয়োগ)** — untracked টাকা বাস্তবে স্থায়ীভাবে চলে গেছে, তাই real saving থেকে অবশ্যই বাদ যাবে। গাণিতিকভাবে এতে `Saving = Practical − Opening` দাঁড়ায়, অর্থাৎ মাসে আসল wealth কত বাড়ল — এটাই সঠিক ও intuitive।
+- **Loan (Lent/Borrowed) এতে ধরা হবে না** — loan একটি আলাদা ledger (asset/liability), income/expense নয়; এটি শুধু §B-এর live `OutstandingLent/Borrowed` হিসেবে আসে। এখানে ধরলে double-count হবে।
+- Practical Balance না দিলে Untracked = 0 → তখন `Saving = Income − Daily Expense`।
+- Untracked **negative** হলে (found money) Saving বেড়ে যাবে — formula symmetric, সঠিক।
 
-## E. Carry Forward (consistency check)
+## E. Carry Forward (savings ledger)
 
 `New Month Opening = Previous Month Opening + Previous Month Saving`
+`                  = Prev Opening + Income − Daily Expense − Untracked`
 
-- যেহেতু Saving = Income − Daily Expense (§D), Opening কখনো loan বা untracked effect বহন করে না → Theoretical Balance-এর global loan adjustment-এর সাথে **double-count হয় না**। ✓
+- এই chain-এ **Untracked fold হয়** → তাই Opening সবসময় বাস্তব savings track করে এবং untracked স্থায়ীভাবে accounted থাকে।
+- কিন্তু **Loan কখনো এই chain-এ fold হয় না** — loan শুধু §B-এর live `OutstandingLent/Borrowed`-এ থাকে। (তাই Opening ≠ Practical; এরা net outstanding loan পরিমাণে আলাদা।)
+- ⚠️ **Double-count এড়ানোর দুই নিয়ম:** (১) Untracked প্রতি মাসে current-month-scoped theoretical দিয়ে **fresh** হিসাব হয় (§B), তাই আগের মাসের untracked আবার গোনা হয় না (cumulative নয়, per-month)। (২) Loan opening-এ fold না করায় live adjustment-এর সাথে duplicate হয় না।
 
 ## F. Total Expense (label সতর্কতা)
 
@@ -468,7 +475,7 @@ New Month Opening Balance =
 Previous Month Opening Balance +
 Previous Month Saving
 
-> Saving-এর সংজ্ঞা: **Calculation Definitions §D** (Income − Daily Expense; loan ও untracked বাদ)। ভিন্ন সংজ্ঞা ব্যবহার করলে double-count হবে।
+> Saving-এর সংজ্ঞা: **Calculation Definitions §D** — `Saving = Income − (Daily Expense + Untracked)`; **untracked বিয়োগ হয়, loan বাদ থাকে**। এই Saving fold হয়ে নতুন Opening তৈরি করে (§E)। ভিন্ন সংজ্ঞা ব্যবহার করলে opening বাস্তব cash থেকে drift করবে।
 
 ---
 

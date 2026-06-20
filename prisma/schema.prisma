@@ -1,13 +1,146 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
+// FinTrack backend Prisma schema
+// Money rule (Modification #1): all monetary values are integer paisa, stored as BigInt.
+// Sync rule (Modification #3/#4): client-generated UUID primary keys + soft-delete tombstones.
 
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  runtime             = "nodejs"
+  moduleFormat        = "cjs"
+  importFileExtension = ""
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+enum SyncStatus {
+  PENDING
+  SYNCED
+  FAILED
+}
+
+enum LoanDirection {
+  LENT
+  BORROWED
+}
+
+enum LoanStatus {
+  ACTIVE
+  SETTLED
+}
+
+model User {
+  id             String   @id @default(uuid())
+  email          String   @unique
+  passwordHash   String
+  name           String?
+  // Initial opening savings (paisa) — the all-time base for the first month (Savings Management).
+  openingSavings BigInt   @default(0)
+  currency       String   @default("BDT")
+  timezone       String   @default("Asia/Dhaka")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  incomes          Income[]
+  expenses         Expense[]
+  loans            Loan[]
+  refreshTokens    RefreshToken[]
+  monthlySummaries MonthlySummary[]
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Income {
+  id         String     @id @default(uuid())
+  userId     String
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount     BigInt
+  source     String
+  date       DateTime
+  note       String?
+  isDeleted  Boolean    @default(false)
+  deletedAt  DateTime?
+  syncStatus SyncStatus @default(SYNCED)
+  // updatedAt is managed manually (not @updatedAt) so Sync can preserve client time for LWW.
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @default(now())
+
+  @@index([userId, date])
+  @@index([userId, updatedAt])
+}
+
+model Expense {
+  id          String     @id @default(uuid())
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount      BigInt
+  category    String
+  date        DateTime
+  description String?
+  isDeleted   Boolean    @default(false)
+  deletedAt   DateTime?
+  syncStatus  SyncStatus @default(SYNCED)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @default(now())
+
+  @@index([userId, date])
+  @@index([userId, updatedAt])
+}
+
+model Loan {
+  id          String        @id @default(uuid())
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  direction   LoanDirection
+  personName  String
+  amount      BigInt
+  date        DateTime
+  note        String?
+  status      LoanStatus    @default(ACTIVE)
+  settledDate DateTime?
+  isDeleted   Boolean       @default(false)
+  deletedAt   DateTime?
+  syncStatus  SyncStatus    @default(SYNCED)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @default(now())
+
+  @@index([userId, status])
+  @@index([userId, updatedAt])
+}
+
+// Backend cross-check snapshot of a closed month (client is the authority — Modification #6).
+model MonthlySummary {
+  id                  String     @id @default(uuid())
+  userId              String
+  user                User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  year                Int
+  month               Int // 1-12
+  openingBalance      BigInt
+  totalIncome         BigInt
+  totalDailyExpense   BigInt
+  outstandingLent     BigInt
+  outstandingBorrowed BigInt
+  untrackedExpense    BigInt     @default(0)
+  monthlySaving       BigInt
+  closingBalance      BigInt
+  practicalBalance    BigInt?
+  isDeleted           Boolean    @default(false)
+  deletedAt           DateTime?
+  syncStatus          SyncStatus @default(SYNCED)
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @default(now())
+
+  @@unique([userId, year, month])
+  @@index([userId, updatedAt])
 }
