@@ -1,13 +1,15 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
+import { MailService } from '../mail/mail.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 
@@ -30,16 +32,25 @@ export class AuthService {
   private readonly accessExpiresIn: string;
   private readonly refreshSecret: string;
   private readonly refreshExpiresIn: string;
+  private readonly resetUrlBase: string;
+  private readonly resetExpiresMs: number;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
+    private readonly mail: MailService,
     config: ConfigService,
   ) {
     this.accessSecret = config.getOrThrow<string>('JWT_ACCESS_SECRET');
     this.accessExpiresIn = config.get<string>('JWT_ACCESS_EXPIRES_IN', '15m');
     this.refreshSecret = config.getOrThrow<string>('JWT_REFRESH_SECRET');
     this.refreshExpiresIn = config.get<string>('JWT_REFRESH_EXPIRES_IN', '90d');
+    this.resetUrlBase = config.get<string>(
+      'PASSWORD_RESET_URL',
+      'fintrack://reset-password',
+    );
+    this.resetExpiresMs =
+      Number(config.get<string>('PASSWORD_RESET_EXPIRES_MIN', '60')) * 60 * 1000;
   }
 
   async register(dto: RegisterDto): Promise<AuthResult> {
@@ -133,6 +144,65 @@ export class AuthService {
     return { success: true };
   }
 
+  /**
+   * Issues a single-use, time-limited reset token and emails a reset link.
+   * Always returns success so the endpoint never reveals whether an email exists.
+   */
+  async forgotPassword(email: string): Promise<{ success: boolean }> {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (user) {
+      // Invalidate any previously issued, still-unused tokens.
+      await this.prisma.passwordResetToken.updateMany({
+        where: { userId: user.id, usedAt: null },
+        data: { usedAt: new Date() },
+      });
+
+      const rawToken = randomBytes(32).toString('hex');
+      await this.prisma.passwordResetToken.create({
+        data: {
+          userId: user.id,
+          tokenHash: this.hashToken(rawToken),
+          expiresAt: new Date(Date.now() + this.resetExpiresMs),
+        },
+      });
+
+      const separator = this.resetUrlBase.includes('?') ? '&' : '?';
+      const resetUrl = `${this.resetUrlBase}${separator}token=${rawToken}`;
+      await this.mail.sendPasswordReset(user.email, resetUrl);
+    }
+    return { success: true };
+  }
+
+  async resetPassword(
+    token: string,
+    newPassword: string,
+  ): Promise<{ success: boolean }> {
+    const record = await this.prisma.passwordResetToken.findUnique({
+      where: { tokenHash: this.hashToken(token) },
+    });
+    if (!record || record.usedAt || record.expiresAt < new Date()) {
+      throw new BadRequestException('Invalid or expired reset token');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: record.userId },
+        data: { passwordHash },
+      }),
+      this.prisma.passwordResetToken.update({
+        where: { id: record.id },
+        data: { usedAt: new Date() },
+      }),
+      // Security: force re-login on every device after a password reset.
+      this.prisma.refreshToken.updateMany({
+        where: { userId: record.userId },
+        data: { revoked: true },
+      }),
+    ]);
+    return { success: true };
+  }
+
   private async buildAuthResult(
     userId: string,
     email: string,
@@ -140,13 +210,19 @@ export class AuthService {
   ): Promise<AuthResult> {
     const accessToken = await this.jwt.signAsync(
       { sub: userId, email },
-      { secret: this.accessSecret, expiresIn: this.accessExpiresIn },
+      {
+        secret: this.accessSecret,
+        expiresIn: this.accessExpiresIn as unknown as number,
+      },
     );
 
     const tokenId = randomUUID();
     const refreshToken = await this.jwt.signAsync(
       { sub: userId, jti: tokenId },
-      { secret: this.refreshSecret, expiresIn: this.refreshExpiresIn },
+      {
+        secret: this.refreshSecret,
+        expiresIn: this.refreshExpiresIn as unknown as number,
+      },
     );
 
     const decoded = this.jwt.decode(refreshToken) as { exp: number };

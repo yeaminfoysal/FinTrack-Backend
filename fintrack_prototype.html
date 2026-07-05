@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FinTrack Prototype</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --bg-color: #0f172a; /* Slate 900 */
+            --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            --card-bg: rgba(30, 41, 59, 0.7); /* Slate 800 with opacity */
+            --card-border: rgba(255, 255, 255, 0.1);
+            --primary: #3b82f6; /* Blue 500 */
+            --primary-glow: rgba(59, 130, 246, 0.5);
+            --success: #10b981; /* Emerald 500 */
+            --danger: #ef4444; /* Red 500 */
+            --warning: #f59e0b; /* Amber 500 */
+            --text-main: #f8fafc; /* Slate 50 */
+            --text-muted: #94a3b8; /* Slate 400 */
+            
+            --glass-backdrop: blur(12px);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-gradient);
+            background-attachment: fixed;
+            color: var(--text-main);
+            min-height: 100vh;
+            padding-bottom: 80px; /* Space for bottom nav */
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Utility */
+        .text-success { color: var(--success); }
+        .text-danger { color: var(--danger); }
+        .text-warning { color: var(--warning); }
+        .text-primary { color: var(--primary); }
+
+        /* App Container (Mobile view simulation) */
+        .app-container {
+            max-width: 480px;
+            margin: 0 auto;
+            padding: 20px;
+            position: relative;
+        }
+
+        /* Header */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            animation: fadeInDown 0.5s ease-out;
+        }
+
+        .logo {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: linear-gradient(to right, #60a5fa, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(45deg, #3b82f6, #8b5cf6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            box-shadow: 0 4px 10px rgba(139, 92, 246, 0.3);
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .avatar:hover {
+            transform: scale(1.05);
+        }
+
+        /* Glassmorphism Card */
+        .glass-card {
+            background: var(--card-bg);
+            backdrop-filter: var(--glass-backdrop);
+            -webkit-backdrop-filter: var(--glass-backdrop);
+            border: 1px solid var(--card-border);
+            border-radius: 20px;
+            padding: 24px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Main Balance Card */
+        .balance-card {
+            margin-bottom: 24px;
+            text-align: center;
+            animation: fadeInUp 0.5s ease-out 0.1s both;
+        }
+
+        .balance-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle at center, rgba(59, 130, 246, 0.15) 0%, transparent 50%);
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .balance-label {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .balance-amount {
+            font-family: 'Outfit', sans-serif;
+            font-size: 2.8rem;
+            font-weight: 700;
+            margin-bottom: 16px;
+            position: relative;
+            z-index: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .currency-symbol {
+            font-size: 1.8rem;
+            color: var(--primary);
+        }
+
+        .net-worth {
+            display: inline-block;
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-box {
+            background: rgba(30, 41, 59, 0.5);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 16px;
+            animation: fadeInUp 0.5s ease-out 0.2s both;
+            transition: transform 0.2s, background 0.2s;
+        }
+
+        .stat-box:hover {
+            transform: translateY(-2px);
+            background: rgba(30, 41, 59, 0.8);
+        }
+
+        .stat-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            margin-bottom: 12px;
+        }
+
+        .icon-income { background: rgba(16, 185, 129, 0.15); color: var(--success); }
+        .icon-expense { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
+        .icon-lent { background: rgba(59, 130, 246, 0.15); color: var(--primary); }
+        .icon-borrowed { background: rgba(245, 158, 11, 0.15); color: var(--warning); }
+        .icon-untracked { background: rgba(139, 92, 246, 0.15); color: #8b5cf6; }
+        .icon-saving { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        .stat-value {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+
+        /* Section Title */
+        .section-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            animation: fadeInUp 0.5s ease-out 0.3s both;
+        }
+
+        .see-all {
+            font-size: 0.85rem;
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        /* Transaction List */
+        .transaction-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            animation: fadeInUp 0.5s ease-out 0.4s both;
+        }
+
+        .transaction-item {
+            display: flex;
+            align-items: center;
+            background: rgba(30, 41, 59, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 16px;
+            transition: background 0.2s;
+        }
+
+        .transaction-item:hover {
+            background: rgba(30, 41, 59, 0.8);
+        }
+
+        .tx-icon-wrapper {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            margin-right: 16px;
+        }
+
+        .tx-details {
+            flex: 1;
+        }
+
+        .tx-title {
+            font-weight: 600;
+            font-size: 1rem;
+            margin-bottom: 4px;
+        }
+
+        .tx-date {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .tx-amount {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 600;
+            font-size: 1.1rem;
+            text-align: right;
+        }
+
+        .tx-status {
+            font-size: 0.75rem;
+            background: rgba(255,255,255,0.1);
+            padding: 2px 8px;
+            border-radius: 10px;
+            margin-top: 4px;
+            display: inline-block;
+        }
+
+        /* Action Buttons */
+        .action-buttons {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-bottom: 24px;
+            animation: fadeInUp 0.5s ease-out 0.3s both;
+        }
+
+        .action-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            background: transparent;
+            border: none;
+            color: var(--text-main);
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .action-btn:hover {
+            transform: translateY(-3px);
+        }
+
+        .action-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 14px;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .action-btn span {
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: var(--text-muted);
+        }
+
+        /* Bottom Navigation */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100%;
+            max-width: 480px;
+            background: rgba(15, 23, 42, 0.9);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-top: 1px solid var(--card-border);
+            display: flex;
+            justify-content: space-around;
+            padding: 12px 20px 24px; /* Extra padding for mobile home bar */
+            z-index: 1000;
+        }
+
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.75rem;
+            transition: color 0.3s;
+        }
+
+        .nav-item.active {
+            color: var(--primary);
+        }
+
+        .nav-item i {
+            font-size: 1.2rem;
+            margin-bottom: 4px;
+            transition: transform 0.3s;
+        }
+
+        .nav-item.active i {
+            transform: translateY(-2px);
+            text-shadow: 0 0 10px var(--primary-glow);
+        }
+
+        /* Floating FAB (Center of nav) */
+        .fab-wrapper {
+            position: relative;
+            top: -20px;
+        }
+
+        .fab {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.5rem;
+            box-shadow: 0 8px 20px var(--primary-glow);
+            border: 4px solid var(--bg-color);
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .fab:hover {
+            transform: scale(1.05) rotate(90deg);
+            box-shadow: 0 12px 25px var(--primary-glow);
+        }
+
+        /* Animations */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Practical Balance Update Modal (Hidden by default) */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(5px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .modal {
+            background: var(--bg-color);
+            border: 1px solid var(--card-border);
+            border-radius: 24px;
+            width: 90%;
+            max-width: 400px;
+            padding: 24px;
+            transform: translateY(20px);
+            transition: transform 0.3s;
+        }
+
+        .modal.active {
+            transform: translateY(0);
+        }
+
+        .modal-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+
+        .input-group {
+            margin-bottom: 16px;
+        }
+
+        .input-group label {
+            display: block;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        .input-group input {
+            width: 100%;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 12px 16px;
+            color: white;
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.1rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .input-group input:focus {
+            border-color: var(--primary);
+        }
+
+        .btn-primary {
+            width: 100%;
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 14px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn-primary:hover {
+            background: #2563eb;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        
+        <!-- Header -->
+        <header>
+            <div class="logo">
+                <i class="fa-solid fa-wallet text-primary"></i> FinTrack
+            </div>
+            <div class="avatar">
+                YM
+            </div>
+        </header>
+
+        <!-- Main Balance Card -->
+        <div class="glass-card balance-card">
+            <div class="balance-label">Theoretical Balance</div>
+            <div class="balance-amount">
+                <span class="currency-symbol">৳</span> 24,500
+            </div>
+            <div class="net-worth">
+                Net Worth: ৳ 32,000 <i class="fa-solid fa-arrow-trend-up ms-1"></i>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="action-buttons">
+            <button class="action-btn">
+                <div class="action-icon text-success">
+                    <i class="fa-solid fa-arrow-down"></i>
+                </div>
+                <span>Income</span>
+            </button>
+            <button class="action-btn">
+                <div class="action-icon text-danger">
+                    <i class="fa-solid fa-arrow-up"></i>
+                </div>
+                <span>Expense</span>
+            </button>
+            <button class="action-btn">
+                <div class="action-icon text-primary">
+                    <i class="fa-solid fa-handshake-angle"></i>
+                </div>
+                <span>Loan</span>
+            </button>
+            <button class="action-btn" onclick="openModal()">
+                <div class="action-icon text-warning">
+                    <i class="fa-solid fa-scale-balanced"></i>
+                </div>
+                <span>Practical</span>
+            </button>
+        </div>
+
+        <!-- Stats Grid -->
+        <div class="stats-grid">
+            <div class="stat-box">
+                <div class="stat-icon icon-income"><i class="fa-solid fa-arrow-turn-down"></i></div>
+                <div class="stat-label">Month Income</div>
+                <div class="stat-value text-success">৳ 50,000</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-icon icon-expense"><i class="fa-solid fa-arrow-turn-up"></i></div>
+                <div class="stat-label">Daily Expense</div>
+                <div class="stat-value text-danger">৳ 18,500</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-icon icon-lent"><i class="fa-solid fa-money-bill-transfer"></i></div>
+                <div class="stat-label">Outstanding Lent</div>
+                <div class="stat-value text-primary">৳ 12,500</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-icon icon-borrowed"><i class="fa-solid fa-hand-holding-dollar"></i></div>
+                <div class="stat-label">Outstanding Borrowed</div>
+                <div class="stat-value text-warning">৳ 5,000</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-icon icon-untracked"><i class="fa-solid fa-magnifying-glass-dollar"></i></div>
+                <div class="stat-label">Untracked Expense</div>
+                <div class="stat-value" style="color: #8b5cf6;">৳ 1,200</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-icon icon-saving"><i class="fa-solid fa-piggy-bank"></i></div>
+                <div class="stat-label">Month Saving</div>
+                <div class="stat-value text-success">৳ 30,300</div>
+            </div>
+        </div>
+
+        <!-- Recent Transactions -->
+        <div class="section-title">
+            <span>Recent Transactions</span>
+            <a href="#" class="see-all">See All</a>
+        </div>
+
+        <div class="transaction-list">
+            <div class="transaction-item">
+                <div class="tx-icon-wrapper" style="color: #f59e0b; background: rgba(245, 158, 11, 0.1);">
+                    <i class="fa-solid fa-burger"></i>
+                </div>
+                <div class="tx-details">
+                    <div class="tx-title">KFC Dinner</div>
+                    <div class="tx-date">Today, 8:30 PM • Food</div>
+                </div>
+                <div class="tx-amount text-danger">- ৳ 850</div>
+            </div>
+
+            <div class="transaction-item">
+                <div class="tx-icon-wrapper" style="color: #3b82f6; background: rgba(59, 130, 246, 0.1);">
+                    <i class="fa-solid fa-handshake"></i>
+                </div>
+                <div class="tx-details">
+                    <div class="tx-title">Lent to Rahim</div>
+                    <div class="tx-date">Yesterday, 10:15 AM • Loan</div>
+                    <div class="tx-status">Active Lent</div>
+                </div>
+                <div class="tx-amount text-primary">- ৳ 5,000</div>
+            </div>
+
+            <div class="transaction-item">
+                <div class="tx-icon-wrapper" style="color: #10b981; background: rgba(16, 185, 129, 0.1);">
+                    <i class="fa-solid fa-briefcase"></i>
+                </div>
+                <div class="tx-details">
+                    <div class="tx-title">Salary</div>
+                    <div class="tx-date">Jun 1, 09:00 AM • Income</div>
+                </div>
+                <div class="tx-amount text-success">+ ৳ 50,000</div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+        <a href="#" class="nav-item active">
+            <i class="fa-solid fa-house"></i>
+            <span>Home</span>
+        </a>
+        <a href="#" class="nav-item">
+            <i class="fa-solid fa-chart-pie"></i>
+            <span>Stats</span>
+        </a>
+        <div class="fab-wrapper">
+            <div class="fab">
+                <i class="fa-solid fa-plus"></i>
+            </div>
+        </div>
+        <a href="#" class="nav-item">
+            <i class="fa-solid fa-file-pdf"></i>
+            <span>Report</span>
+        </a>
+        <a href="#" class="nav-item">
+            <i class="fa-solid fa-user"></i>
+            <span>Profile</span>
+        </a>
+    </nav>
+
+    <!-- Modal for Practical Balance -->
+    <div class="modal-overlay" id="practicalModal" onclick="closeModal(event)">
+        <div class="modal" id="modalContent">
+            <div class="modal-title">Update Practical Balance</div>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 20px; text-align: center;">
+                Enter the exact cash you currently have in hand, bank, and MFS.
+            </p>
+            <div class="input-group">
+                <label>Actual Amount (৳)</label>
+                <input type="number" placeholder="e.g. 23300" value="23300">
+            </div>
+            <div style="font-size: 0.8rem; color: #8b5cf6; margin-bottom: 20px; text-align: center;">
+                Theoretical: ৳ 24,500 → Untracked Expense: ৳ 1,200
+            </div>
+            <button class="btn-primary" onclick="closeModalForce()">Update Balance</button>
+        </div>
+    </div>
+
+    <script>
+        const modal = document.getElementById('practicalModal');
+        const modalContent = document.getElementById('modalContent');
+
+        function openModal() {
+            modal.style.display = 'flex';
+            // Slight delay to allow display:flex to apply before animating opacity
+            setTimeout(() => {
+                modal.style.opacity = '1';
+                modalContent.classList.add('active');
+            }, 10);
+        }
+
+        function closeModal(e) {
+            if (e.target === modal) {
+                closeModalForce();
+            }
+        }
+
+        function closeModalForce() {
+            modal.style.opacity = '0';
+            modalContent.classList.remove('active');
+            setTimeout(() => {
+                modal.style.display = 'none';
+            }, 300);
+        }
+    </script>
+</body>
+</html>

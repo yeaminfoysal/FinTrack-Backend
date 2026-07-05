@@ -1,12 +1,19 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
-import { LoanDirection, LoanStatus } from '../generated/prisma/client';
+import { LoanDirection, LoanStatus, SyncStatus } from '../generated/prisma/client';
 import { DashboardQueryDto } from './dto/dashboard-query.dto';
 import { MonthlyQueryDto } from './dto/monthly-query.dto';
+import { UpsertMonthlySummaryDto } from './dto/upsert-monthly-summary.dto';
 
 interface DateFilter {
   gte?: Date;
   lt?: Date;
+}
+
+interface MonthAggregate {
+  income: bigint;
+  expense: bigint;
 }
 
 /**
@@ -107,6 +114,130 @@ export class SummaryService {
       monthlySaving,
       closingBalance,
     };
+  }
+
+  /**
+   * All-months history (History Module — Saving History): per-month income,
+   * daily expense, untracked, saving, and the carry-forward opening/closing chain.
+   * Untracked for a month comes from a stored MonthlySummary (pushed by the client
+   * at month-close); months without one report untracked = 0 (§E fold still applies).
+   * Returned chronologically (oldest first) so the opening/closing chain reads top-down.
+   */
+  async history(userId: string) {
+    const [incomes, expenses, summaries, openingSavings] = await Promise.all([
+      this.prisma.income.findMany({
+        where: { userId, isDeleted: false },
+        select: { amount: true, date: true },
+      }),
+      this.prisma.expense.findMany({
+        where: { userId, isDeleted: false },
+        select: { amount: true, date: true },
+      }),
+      this.prisma.monthlySummary.findMany({
+        where: { userId, isDeleted: false },
+        select: { year: true, month: true, untrackedExpense: true },
+      }),
+      this.getOpeningSavings(userId),
+    ]);
+
+    const aggregates = new Map<string, MonthAggregate>();
+    const ensure = (key: string): MonthAggregate => {
+      let agg = aggregates.get(key);
+      if (!agg) {
+        agg = { income: 0n, expense: 0n };
+        aggregates.set(key, agg);
+      }
+      return agg;
+    };
+    const keyOf = (date: Date): string => {
+      const d = new Date(date);
+      return `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}`;
+    };
+
+    for (const income of incomes) {
+      ensure(keyOf(income.date)).income += income.amount;
+    }
+    for (const expense of expenses) {
+      ensure(keyOf(expense.date)).expense += expense.amount;
+    }
+
+    const untrackedByKey = new Map<string, bigint>();
+    for (const summary of summaries) {
+      const key = `${summary.year}-${summary.month}`;
+      untrackedByKey.set(key, summary.untrackedExpense);
+      ensure(key); // surface months that only have a closing summary
+    }
+
+    const keys = [...aggregates.keys()].sort((a, b) => {
+      const [ay, am] = a.split('-').map(Number);
+      const [by, bm] = b.split('-').map(Number);
+      return ay - by || am - bm;
+    });
+
+    let opening = openingSavings;
+    const months = keys.map((key) => {
+      const [year, month] = key.split('-').map(Number);
+      const { income, expense } = aggregates.get(key)!;
+      const untrackedExpense = untrackedByKey.get(key) ?? 0n;
+      const monthlySaving = income - expense - untrackedExpense; // §D
+      const openingBalance = opening;
+      const closingBalance = opening + monthlySaving; // §E carry-forward
+      opening = closingBalance;
+      return {
+        year,
+        month,
+        totalIncome: income,
+        totalDailyExpense: expense,
+        untrackedExpense,
+        monthlySaving,
+        openingBalance,
+        closingBalance,
+      };
+    });
+
+    return { months };
+  }
+
+  /**
+   * Stores a client-computed month-close summary (Monthly Closing System,
+   * Modification #8/#11). Upserts by (userId, year, month) so re-closing /
+   * backdated recompute is idempotent. Once stored, /summary/history can show
+   * that month's real untracked expense and untracked-folded saving.
+   */
+  async upsertMonthly(userId: string, dto: UpsertMonthlySummaryDto) {
+    const now = new Date();
+    const data = {
+      openingBalance: BigInt(dto.openingBalance),
+      totalIncome: BigInt(dto.totalIncome),
+      totalDailyExpense: BigInt(dto.totalDailyExpense),
+      outstandingLent: BigInt(dto.outstandingLent),
+      outstandingBorrowed: BigInt(dto.outstandingBorrowed),
+      untrackedExpense: BigInt(dto.untrackedExpense),
+      monthlySaving: BigInt(dto.monthlySaving),
+      closingBalance: BigInt(dto.closingBalance),
+      practicalBalance:
+        dto.practicalBalance === undefined
+          ? null
+          : BigInt(dto.practicalBalance),
+      isDeleted: false,
+      deletedAt: null,
+      syncStatus: SyncStatus.SYNCED,
+      updatedAt: now,
+    };
+    return this.prisma.monthlySummary.upsert({
+      where: {
+        userId_year_month: { userId, year: dto.year, month: dto.month },
+      },
+      update: data,
+      create: {
+        id: dto.id ?? randomUUID(),
+        userId,
+        year: dto.year,
+        month: dto.month,
+        createdAt: now,
+        ...data,
+      },
+    });
   }
 
   private async getOpeningSavings(userId: string): Promise<bigint> {

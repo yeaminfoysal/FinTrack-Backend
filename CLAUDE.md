@@ -466,6 +466,15 @@ App Open হলে System একটি **Catch-up Check** চালাবে:
 - Recompute অবশ্যই **idempotent**: একই input থেকে সবসময় একই output।
 - যেহেতু Opening Balance chain আকারে carry-forward হয় (§E), একটি পুরোনো মাস বদলালে পুরো chain ঠিক করতে হবে — শুধু একটি মাস নয়।
 
+### Backend-এ Summary Push (Modification #12)
+
+> Client month-close করার পর প্রতিটি closed মাসের computed summary backend-এ **push** করবে, যাতে অন্য device-এ sync হয় এবং `/summary/history`-তে সেই মাসের **প্রকৃত untracked** দেখা যায়।
+
+- **Endpoint:** `PUT /api/summary/monthly` — body-তে সেই মাসের `{ year, month, openingBalance, totalIncome, totalDailyExpense, outstandingLent, outstandingBorrowed, untrackedExpense, monthlySaving, closingBalance, practicalBalance? }` (সব integer paisa; client-authoritative মান)।
+- Upsert হয় **(userId, year, month)** key-তে → তাই re-close বা backdated recompute **idempotent**, duplicate হয় না।
+- এই summary গুলো **Sync-এও** যায় (`POST /sync/push` ও `GET /sync/pull`-এ `monthlySummaries[]`), LWW conflict resolution সহ — তাই reinstall/নতুন device-এ ফিরে আসে।
+- **মনে রাখবে:** এই push **না করলে** `/summary/history`-তে প্রতি মাসে `untrackedExpense = 0` দেখাবে (backend historical practical balance রাখে না; §E)। তখন সঠিক untracked শুধু live `/summary/dashboard?practicalBalance=`-এ cumulative হিসেবে দেখা যাবে।
+
 ---
 
 # Carry Forward System
@@ -501,6 +510,20 @@ User দেখতে পারবে:
 - Expense History
 - **Loan History (Lent + Borrowed আলাদা filter সহ)** *(Loan v3)*
 - Saving History
+
+### All-Months Summary API (Modification #12)
+
+> History screen-এর জন্য একটি endpoint যেটি **প্রতিটি মাসের** সারসংক্ষেপ এক তালিকায় ফেরত দেয়।
+
+- **Endpoint:** `GET /api/summary/history`
+- **প্রতি মাসে ফেরত দেয়:**
+    - `totalIncome` (চলতি মাসের income, paisa)
+    - `totalDailyExpense` (চলতি মাসের daily expense)
+    - `untrackedExpense` — শুধু সেসব মাসে যেখানে client month-close করে `MonthlySummary` push করেছে; নাহলে `0` (কারণ historical practical balance backend-এ থাকে না, §E)
+    - `monthlySaving = totalIncome − (totalDailyExpense + untrackedExpense)` (§D)
+    - `openingBalance` ও `closingBalance` — §E carry-forward chain (oldest → newest)
+- যে মাসে কোনো income/expense বা summary নেই সেটি বাদ; gap-month গুলো chain-এ opening অপরিবর্তিত রেখে এগিয়ে যায়।
+- **Loan (Lent/Borrowed) এই তালিকায় ধরা হয় না** — loan আলাদা live running total (§B), monthly saving-এর অংশ নয়।
 
 ---
 
@@ -666,9 +689,14 @@ CRUD
 
 ## Monthly Summary Module
 
-Calculations
+Calculations / Endpoints:
 
-> Backend-এ এই calculation শুধু backup/cross-check-এর জন্য; প্রধান authority client *(Modification #6)*।
+- `GET /summary/dashboard?year=&month=&practicalBalance=` — live current snapshot (balances, outstanding, untracked, saving, net worth)।
+- `GET /summary/monthly?year=&month=` — এক মাসের live computed (tracked) summary।
+- `GET /summary/history` — সব মাসের তালিকা (income, daily expense, untracked, saving, opening/closing chain)।
+- `PUT /summary/monthly` — **month-close push** (client-computed summary store; upsert by year+month; Modification #12)।
+
+> Backend-এ live calculation শুধু backup/cross-check-এর জন্য; প্রধান authority client *(Modification #6)*। তবে stored MonthlySummary (PUT/sync দিয়ে আসা) হলো client-authoritative — `/summary/history` সেখান থেকে per-month untracked নেয়।
 > 
 
 ---
@@ -683,6 +711,10 @@ Calculations
 ## Sync Module
 
 Mobile Synchronization APIs (Push + Pull) *(Modification #3)*
+
+- Synced entities: **Income, Expense, Loan, এবং MonthlySummary** *(Modification #12)*।
+- Income/Expense/Loan upsert হয় **UUID id** key-তে; MonthlySummary upsert হয় **(userId, year, month)** key-তে।
+- Conflict resolution: **Last-Write-Wins** on `updatedAt`।
 
 ---
 
